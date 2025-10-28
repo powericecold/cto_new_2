@@ -2,6 +2,9 @@ console.log('GetDone app initialized');
 
 let currentSection = 'inbox';
 let selectedProjectId = null;
+let activeTagFilter = null;
+let editingTaskId = null;
+let draggedTaskId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded and parsed');
@@ -48,13 +51,70 @@ function setupNavigation() {
             const section = link.getAttribute('href').substring(1);
             currentSection = section;
             selectedProjectId = null;
+            activeTagFilter = null;
             updateMainContent(section);
+        });
+        
+        link.addEventListener('dragover', (e) => {
+            if (draggedTaskId) {
+                e.preventDefault();
+                link.classList.add('drag-over');
+            }
+        });
+        
+        link.addEventListener('dragleave', (e) => {
+            link.classList.remove('drag-over');
+        });
+        
+        link.addEventListener('drop', (e) => {
+            e.preventDefault();
+            link.classList.remove('drag-over');
+            
+            if (!draggedTaskId) return;
+            
+            const section = link.getAttribute('href').substring(1);
+            handleDropOnSection(draggedTaskId, section);
         });
     });
     
     if (navLinks.length > 0) {
         navLinks[0].classList.add('active');
     }
+}
+
+function handleDropOnSection(taskId, section) {
+    const updates = {};
+    
+    switch(section) {
+        case 'inbox':
+            updates.isInbox = true;
+            updates.type = 'inbox';
+            updates.projectId = null;
+            break;
+        case 'someday':
+            updates.isInbox = false;
+            updates.type = 'someday';
+            updates.projectId = null;
+            break;
+        case 'today':
+            const today = new Date().toISOString().split('T')[0];
+            updates.dueDate = today;
+            updates.isInbox = false;
+            if (!updates.type) updates.type = 'project';
+            break;
+        case 'upcoming':
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            updates.dueDate = tomorrow.toISOString().split('T')[0];
+            updates.isInbox = false;
+            if (!updates.type) updates.type = 'project';
+            break;
+        default:
+            return;
+    }
+    
+    DataStore.updateTask(taskId, updates);
+    updateMainContent(currentSection);
 }
 
 function updateMainContent(section) {
@@ -97,6 +157,10 @@ function updateMainContent(section) {
                 tasks = [];
         }
         
+        if (activeTagFilter) {
+            tasks = tasks.filter(task => task.tags.includes(activeTagFilter));
+        }
+        
         renderTaskList(title, tasks);
     }
 }
@@ -107,10 +171,20 @@ function renderTaskList(title, tasks) {
     
     let html = `<h2>${title}</h2>`;
     
+    if (activeTagFilter) {
+        html += `
+            <div class="filter-bar">
+                <span class="filter-label">Filtered by tag:</span>
+                <span class="filter-tag">${escapeHtml(activeTagFilter)}</span>
+                <button class="clear-filter-btn" onclick="clearTagFilter()">✕ Clear Filter</button>
+            </div>
+        `;
+    }
+    
     if (tasks.length === 0) {
         html += renderEmptyState(title);
     } else {
-        html += '<div class="task-list">';
+        html += '<div class="task-list" data-section="' + currentSection + '">';
         tasks.forEach(task => {
             html += renderTaskItem(task);
         });
@@ -119,6 +193,7 @@ function renderTaskList(title, tasks) {
     
     contentArea.innerHTML = html;
     attachTaskEventListeners();
+    setupDropZone();
 }
 
 function renderEmptyState(section) {
@@ -142,11 +217,15 @@ function renderEmptyState(section) {
 
 function renderTaskItem(task) {
     const dueDateDisplay = task.dueDate ? formatDate(task.dueDate) : '';
-    const tagsHtml = task.tags.map(tag => `<span class="tag-chip">${tag}</span>`).join('');
+    const tagsHtml = task.tags.map(tag => 
+        `<span class="tag-chip clickable" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)} <button class="remove-tag-btn" data-task-id="${task.id}" data-tag="${escapeHtml(tag)}">×</button></span>`
+    ).join('');
     const projectName = task.projectId ? getProjectName(task.projectId) : '';
     
+    const isInbox = task.isInbox && task.type === 'inbox';
+    
     return `
-        <div class="task-item" data-task-id="${task.id}">
+        <div class="task-item" data-task-id="${task.id}" draggable="true">
             <div class="task-checkbox-wrapper">
                 <input type="checkbox" 
                        class="task-checkbox" 
@@ -155,13 +234,20 @@ function renderTaskItem(task) {
             </div>
             <div class="task-content">
                 <div class="task-title-row">
-                    <span class="task-title ${task.status === 'completed' ? 'completed' : ''}">${escapeHtml(task.title)}</span>
+                    <span class="task-title ${task.status === 'completed' ? 'completed' : ''}" 
+                          contenteditable="true" 
+                          data-task-id="${task.id}" 
+                          data-field="title">${escapeHtml(task.title)}</span>
                     <div class="task-actions">
+                        ${isInbox ? `<button class="task-action-btn process-task-btn" data-task-id="${task.id}" title="Process/Clarify">🔄</button>` : ''}
+                        <button class="task-action-btn move-task-btn" data-task-id="${task.id}" title="Move to...">📋</button>
+                        <button class="task-action-btn add-tag-btn" data-task-id="${task.id}" title="Add tag">🏷️</button>
                         <button class="task-action-btn edit-task-btn" data-task-id="${task.id}" title="Edit task">✏️</button>
                         <button class="task-action-btn delete-task-btn" data-task-id="${task.id}" title="Delete task">🗑️</button>
                     </div>
                 </div>
-                ${task.notes ? `<div class="task-notes">${escapeHtml(task.notes)}</div>` : ''}
+                ${task.notes ? `<div class="task-notes" contenteditable="true" data-task-id="${task.id}" data-field="notes">${escapeHtml(task.notes)}</div>` : 
+                  `<div class="task-notes task-notes-empty" contenteditable="true" data-task-id="${task.id}" data-field="notes" placeholder="Add notes..."></div>`}
                 <div class="task-meta">
                     ${dueDateDisplay ? `<span class="task-due-date">📅 ${dueDateDisplay}</span>` : ''}
                     ${projectName ? `<span class="task-project">📁 ${escapeHtml(projectName)}</span>` : ''}
@@ -179,6 +265,16 @@ function renderProjectsView() {
     const projects = DataStore.getAllProjects();
     
     let html = '<h2>Projects</h2>';
+    
+    if (activeTagFilter) {
+        html += `
+            <div class="filter-bar">
+                <span class="filter-label">Filtered by tag:</span>
+                <span class="filter-tag">${escapeHtml(activeTagFilter)}</span>
+                <button class="clear-filter-btn" onclick="clearTagFilter()">✕ Clear Filter</button>
+            </div>
+        `;
+    }
     
     if (projects.length === 0) {
         html += renderEmptyState('Projects');
@@ -205,7 +301,11 @@ function renderProjectsView() {
         
         if (selectedProjectId) {
             const project = DataStore.getProject(selectedProjectId);
-            const tasks = DataStore.getTasksByProject(selectedProjectId);
+            let tasks = DataStore.getTasksByProject(selectedProjectId);
+            
+            if (activeTagFilter) {
+                tasks = tasks.filter(task => task.tags.includes(activeTagFilter));
+            }
             
             html += '<div class="project-tasks">';
             html += `<h3>${escapeHtml(project.name)} Tasks</h3>`;
@@ -243,6 +343,7 @@ function renderProjectsView() {
     contentArea.innerHTML = html;
     attachProjectEventListeners();
     attachTaskEventListeners();
+    setupDropZone();
 }
 
 function attachProjectEventListeners() {
@@ -271,6 +372,58 @@ function attachTaskEventListeners() {
     const editButtons = document.querySelectorAll('.edit-task-btn');
     editButtons.forEach(btn => {
         btn.addEventListener('click', handleTaskEdit);
+    });
+    
+    const moveButtons = document.querySelectorAll('.move-task-btn');
+    moveButtons.forEach(btn => {
+        btn.addEventListener('click', handleMoveTask);
+    });
+    
+    const addTagButtons = document.querySelectorAll('.add-tag-btn');
+    addTagButtons.forEach(btn => {
+        btn.addEventListener('click', handleAddTag);
+    });
+    
+    const processButtons = document.querySelectorAll('.process-task-btn');
+    processButtons.forEach(btn => {
+        btn.addEventListener('click', handleProcessTask);
+    });
+    
+    const editableFields = document.querySelectorAll('[contenteditable="true"]');
+    editableFields.forEach(field => {
+        field.addEventListener('blur', handleInlineEdit);
+        field.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                field.blur();
+            }
+        });
+    });
+    
+    const tagChips = document.querySelectorAll('.tag-chip.clickable');
+    tagChips.forEach(chip => {
+        chip.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('remove-tag-btn')) {
+                const tag = chip.getAttribute('data-tag');
+                if (tag) {
+                    setTagFilter(tag);
+                }
+            }
+        });
+    });
+    
+    const removeTagButtons = document.querySelectorAll('.remove-tag-btn');
+    removeTagButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleRemoveTag(e);
+        });
+    });
+    
+    const taskItems = document.querySelectorAll('.task-item[draggable="true"]');
+    taskItems.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
     });
 }
 
@@ -469,6 +622,276 @@ function handleEditTaskSubmit(e, taskId) {
     
     closeModal();
     updateMainContent(currentSection);
+}
+
+function handleInlineEdit(e) {
+    const taskId = e.target.getAttribute('data-task-id');
+    const field = e.target.getAttribute('data-field');
+    const newValue = e.target.textContent.trim();
+    
+    if (!taskId || !field) return;
+    
+    const task = DataStore.getTask(taskId);
+    if (!task) return;
+    
+    if (task[field] !== newValue) {
+        const updates = {};
+        updates[field] = newValue;
+        DataStore.updateTask(taskId, updates);
+    }
+}
+
+function handleMoveTask(e) {
+    const taskId = e.currentTarget.getAttribute('data-task-id');
+    const task = DataStore.getTask(taskId);
+    
+    if (!task) return;
+    
+    showMoveTaskMenu(task, e.currentTarget);
+}
+
+function showMoveTaskMenu(task, buttonElement) {
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const projects = DataStore.getAllProjects();
+    const rect = buttonElement.getBoundingClientRect();
+    
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.top = `${rect.bottom + window.scrollY}px`;
+    menu.style.left = `${rect.left + window.scrollX}px`;
+    
+    let menuItems = `
+        <div class="context-menu-item" data-action="move-inbox" data-task-id="${task.id}">
+            📥 Move to Inbox
+        </div>
+        <div class="context-menu-item" data-action="move-someday" data-task-id="${task.id}">
+            💭 Move to Someday/Maybe
+        </div>
+        <div class="context-menu-divider"></div>
+    `;
+    
+    if (projects.length > 0) {
+        menuItems += '<div class="context-menu-label">Move to Project:</div>';
+        projects.forEach(project => {
+            menuItems += `
+                <div class="context-menu-item" data-action="move-project" data-task-id="${task.id}" data-project-id="${project.id}">
+                    📁 ${escapeHtml(project.name)}
+                </div>
+            `;
+        });
+    }
+    
+    menu.innerHTML = menuItems;
+    document.body.appendChild(menu);
+    
+    menu.querySelectorAll('.context-menu-item').forEach(item => {
+        item.addEventListener('click', handleMoveTaskAction);
+    });
+    
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 0);
+}
+
+function handleMoveTaskAction(e) {
+    const action = e.currentTarget.getAttribute('data-action');
+    const taskId = e.currentTarget.getAttribute('data-task-id');
+    const projectId = e.currentTarget.getAttribute('data-project-id');
+    
+    const updates = {};
+    
+    if (action === 'move-inbox') {
+        updates.isInbox = true;
+        updates.type = 'inbox';
+        updates.projectId = null;
+    } else if (action === 'move-someday') {
+        updates.isInbox = false;
+        updates.type = 'someday';
+        updates.projectId = null;
+    } else if (action === 'move-project' && projectId) {
+        updates.isInbox = false;
+        updates.type = 'project';
+        updates.projectId = projectId;
+    }
+    
+    DataStore.updateTask(taskId, updates);
+    
+    const menu = document.querySelector('.context-menu');
+    if (menu) menu.remove();
+    
+    updateMainContent(currentSection);
+}
+
+function handleAddTag(e) {
+    const taskId = e.currentTarget.getAttribute('data-task-id');
+    const task = DataStore.getTask(taskId);
+    
+    if (!task) return;
+    
+    const tagName = prompt('Enter tag name:');
+    if (tagName && tagName.trim()) {
+        const trimmedTag = tagName.trim().toLowerCase();
+        if (!task.tags.includes(trimmedTag)) {
+            const updatedTags = [...task.tags, trimmedTag];
+            DataStore.updateTask(taskId, { tags: updatedTags });
+            DataStore.addTag(trimmedTag);
+            updateMainContent(currentSection);
+        }
+    }
+}
+
+function handleRemoveTag(e) {
+    const taskId = e.currentTarget.getAttribute('data-task-id');
+    const tag = e.currentTarget.getAttribute('data-tag');
+    
+    const task = DataStore.getTask(taskId);
+    if (!task) return;
+    
+    const updatedTags = task.tags.filter(t => t !== tag);
+    DataStore.updateTask(taskId, { tags: updatedTags });
+    updateMainContent(currentSection);
+}
+
+function handleProcessTask(e) {
+    const taskId = e.currentTarget.getAttribute('data-task-id');
+    const task = DataStore.getTask(taskId);
+    
+    if (!task) return;
+    
+    showProcessTaskModal(task);
+}
+
+function showProcessTaskModal(task) {
+    const modalContainer = document.getElementById('modal-container');
+    if (!modalContainer) return;
+    
+    const projects = DataStore.getAllProjects();
+    const projectOptions = projects.map(p => 
+        `<option value="${p.id}">${escapeHtml(p.name)}</option>`
+    ).join('');
+    
+    modalContainer.innerHTML = `
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Process Task</h3>
+                <button class="modal-close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-form">
+                <p class="clarify-text">Convert this inbox item to an actionable task:</p>
+                <div class="form-group">
+                    <label>Current Title:</label>
+                    <p><strong>${escapeHtml(task.title)}</strong></p>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" onclick="convertToProject('${task.id}')">
+                        📁 Assign to Project
+                    </button>
+                    <button class="btn btn-secondary" onclick="convertToSomeday('${task.id}')">
+                        💭 Move to Someday
+                    </button>
+                    <button class="btn btn-primary" onclick="convertToAction('${task.id}')">
+                        ✅ Make Next Action
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modalContainer.classList.add('active');
+}
+
+function setTagFilter(tag) {
+    activeTagFilter = tag;
+    updateMainContent(currentSection);
+}
+
+function clearTagFilter() {
+    activeTagFilter = null;
+    updateMainContent(currentSection);
+}
+
+function convertToProject(taskId) {
+    const task = DataStore.getTask(taskId);
+    if (!task) return;
+    
+    const projects = DataStore.getAllProjects();
+    if (projects.length === 0) {
+        alert('No projects available. Please create a project first.');
+        return;
+    }
+    
+    const projectId = projects[0].id;
+    DataStore.updateTask(taskId, {
+        isInbox: false,
+        type: 'project',
+        projectId: projectId
+    });
+    
+    closeModal();
+    updateMainContent(currentSection);
+}
+
+function convertToSomeday(taskId) {
+    DataStore.updateTask(taskId, {
+        isInbox: false,
+        type: 'someday',
+        projectId: null
+    });
+    
+    closeModal();
+    updateMainContent(currentSection);
+}
+
+function convertToAction(taskId) {
+    const task = DataStore.getTask(taskId);
+    if (!task) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    DataStore.updateTask(taskId, {
+        isInbox: false,
+        type: 'project',
+        dueDate: today
+    });
+    
+    closeModal();
+    updateMainContent(currentSection);
+}
+
+function handleDragStart(e) {
+    draggedTaskId = e.currentTarget.getAttribute('data-task-id');
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    draggedTaskId = null;
+}
+
+function setupDropZone() {
+    const taskList = document.querySelector('.task-list');
+    if (!taskList) return;
+    
+    taskList.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    });
+    
+    taskList.addEventListener('drop', (e) => {
+        e.preventDefault();
+    });
 }
 
 function closeModal() {
