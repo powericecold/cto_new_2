@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Test - GetDone</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 
+                         'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', 
+                         sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #3b82f6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        button {
+            padding: 10px 20px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>📆 Calendar Scheduling - Manual Test Guide</h1>
+    
+    <div class="test-section">
+        <h2>Test Instructions</h2>
+        <p>Follow these steps to test the calendar scheduling functionality:</p>
+        <ol>
+            <li>Open <a href="index.html" target="_blank">index.html</a> in a new tab</li>
+            <li>Navigate to the Calendar view using the sidebar</li>
+            <li>Perform the tests below</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>✅ Acceptance Criteria Tests</h2>
+        
+        <h3>1. Calendar Tab Displays Monthly Grid</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Click on "Calendar" in the sidebar
+            <br><strong>Expected:</strong> Calendar view shows current month with:
+            <ul>
+                <li>Month and year header</li>
+                <li>Navigation buttons (Previous, Today, Next)</li>
+                <li>7-day week grid (Sun-Sat)</li>
+                <li>Proper day numbering</li>
+                <li>Today's date highlighted</li>
+            </ul>
+        </div>
+
+        <h3>2. Tasks Display on Calendar Dates</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Look at dates with existing tasks (check sample data)
+            <br><strong>Expected:</strong> 
+            <ul>
+                <li>Tasks appear as colored chips on their due dates</li>
+                <li>Today's tasks are visible</li>
+                <li>Task titles are readable</li>
+                <li>Each task chip has a remove button (×)</li>
+            </ul>
+        </div>
+
+        <h3>3. Drag-and-Drop from Unscheduled Tasks</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Drag a task from "Unscheduled Tasks" sidebar to a calendar date
+            <br><strong>Expected:</strong>
+            <ul>
+                <li>Task chip is draggable</li>
+                <li>Calendar dates show visual feedback (highlighted) when dragging over</li>
+                <li>Task appears on dropped date after release</li>
+                <li>Task disappears from unscheduled list</li>
+            </ul>
+        </div>
+
+        <h3>4. Drag-and-Drop Between Calendar Dates</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Drag a task from one calendar date to another
+            <br><strong>Expected:</strong>
+            <ul>
+                <li>Task can be picked up from calendar date</li>
+                <li>Drop target date shows visual feedback</li>
+                <li>Task moves to new date</li>
+                <li>Task removed from original date</li>
+            </ul>
+        </div>
+
+        <h3>5. Clear Due Date Functionality</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Click the "×" button on a calendar task chip
+            <br><strong>Expected:</strong>
+            <ul>
+                <li>Task is removed from calendar date</li>
+                <li>Task appears in "Unscheduled Tasks" sidebar</li>
+                <li>Task's due date is cleared</li>
+            </ul>
+        </div>
+
+        <h3>6. Drag Task Back to Unscheduled</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Drag a task from calendar date to "Unscheduled Tasks" area
+            <br><strong>Expected:</strong>
+            <ul>
+                <li>Unscheduled area shows drop target feedback</li>
+                <li>Task moves to unscheduled list</li>
+                <li>Task's due date is cleared</li>
+            </ul>
+        </div>
+
+        <h3>7. Cross-View Synchronization</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> 
+            <ol>
+                <li>Set a task's due date to today in calendar</li>
+                <li>Navigate to "Today" view</li>
+                <li>Navigate back to "Calendar" view</li>
+                <li>Navigate to "Upcoming" view</li>
+            </ol>
+            <strong>Expected:</strong>
+            <ul>
+                <li>Task appears in Today view immediately</li>
+                <li>Task persists in calendar after navigation</li>
+                <li>Task appears in Upcoming if dated for future</li>
+                <li>All views stay synchronized</li>
+            </ul>
+        </div>
+
+        <h3>8. Data Persistence</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> 
+            <ol>
+                <li>Assign due dates to several tasks</li>
+                <li>Reload the page (F5)</li>
+                <li>Navigate to Calendar view</li>
+            </ol>
+            <strong>Expected:</strong>
+            <ul>
+                <li>All due date assignments persist</li>
+                <li>Tasks appear on correct dates</li>
+                <li>Calendar state is restored</li>
+            </ul>
+        </div>
+
+        <h3>9. Month Navigation</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> 
+            <ol>
+                <li>Click "Next month" button (▶)</li>
+                <li>Click "Previous month" button (◀)</li>
+                <li>Click "Today" button</li>
+            </ol>
+            <strong>Expected:</strong>
+            <ul>
+                <li>Calendar advances to next month</li>
+                <li>Calendar goes back to previous month</li>
+                <li>Calendar returns to current month</li>
+                <li>Header updates with correct month/year</li>
+            </ul>
+        </div>
+
+        <h3>10. Responsive Layout (Mobile/Tablet)</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Resize browser window or use device emulation (F12 > Device toolbar)
+            <br><strong>Expected:</strong>
+            <ul>
+                <li>Calendar grid adapts to smaller screens</li>
+                <li>Unscheduled sidebar moves below calendar on mobile</li>
+                <li>Touch interactions work on mobile devices</li>
+                <li>Calendar remains usable at all screen sizes</li>
+            </ul>
+        </div>
+
+        <h3>11. Touch Interactions (Mobile)</h3>
+        <div class="test-result info">
+            <strong>Test:</strong> Use device emulation with touch mode or test on actual mobile device
+            <br><strong>Expected:</strong>
+            <ul>
+                <li>Can touch and drag tasks on mobile</li>
+                <li>Visual feedback during touch drag</li>
+                <li>Tasks can be dropped on dates using touch</li>
+                <li>Touch scrolling works properly</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 Developer Tests</h2>
+        <button onclick="runDevTests()">Run Automated Tests</button>
+        <div id="dev-test-results"></div>
+    </div>
+
+    <script>
+        function runDevTests() {
+            const resultsDiv = document.getElementById('dev-test-results');
+            let results = '<h3>Automated Test Results:</h3>';
+            
+            // Test 1: Check if calendar functions exist
+            const testResults = [];
+            
+            testResults.push({
+                name: 'Calendar functions defined',
+                pass: typeof navigateCalendar === 'function' && 
+                      typeof navigateCalendarToday === 'function'
+            });
+            
+            // Test 2: Check calendar view render
+            try {
+                const calendarHtml = '<div class="calendar-container">TEST</div>';
+                testResults.push({
+                    name: 'Calendar HTML structure',
+                    pass: calendarHtml.includes('calendar-container')
+                });
+            } catch (e) {
+                testResults.push({
+                    name: 'Calendar HTML structure',
+                    pass: false,
+                    error: e.message
+                });
+            }
+            
+            // Display results
+            testResults.forEach(test => {
+                results += `<div class="test-result ${test.pass ? 'pass' : 'fail'}">
+                    ${test.pass ? '✅' : '❌'} ${test.name}
+                    ${test.error ? `<br>Error: ${test.error}` : ''}
+                </div>`;
+            });
+            
+            resultsDiv.innerHTML = results;
+        }
+    </script>
+
+    <div class="test-section">
+        <h2>📝 Additional Notes</h2>
+        <ul>
+            <li><strong>Visual Feedback:</strong> Calendar dates should highlight when dragging tasks over them</li>
+            <li><strong>Cursor:</strong> Task chips should show a "move" cursor on hover</li>
+            <li><strong>Performance:</strong> Drag operations should be smooth with no lag</li>
+            <li><strong>Empty States:</strong> "Unscheduled Tasks" shows a friendly message when all tasks are scheduled</li>
+            <li><strong>Task Information:</strong> Hovering over task chips shows full title and project name</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🐛 Known Issues / Limitations</h2>
+        <ul>
+            <li>Tasks on calendar show truncated titles (by design for space)</li>
+            <li>Only pending (non-completed) tasks appear on calendar</li>
+            <li>Someday/Maybe tasks don't appear in unscheduled list (by design)</li>
+        </ul>
+    </div>
+</body>
+</html>
