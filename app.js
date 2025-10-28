@@ -3,7 +3,11 @@ console.log('GetDone app initialized');
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded and parsed');
     
+    DataStore.initialize();
+    
     initializeApp();
+    
+    runDataAPITests();
 });
 
 function initializeApp() {
@@ -78,3 +82,48 @@ function closeModal() {
         modalContainer.classList.remove('active');
     }
 }
+
+function runDataAPITests() {
+    console.log('\n=== Data API Tests ===\n');
+    
+    console.log('1. Get all tasks:', DataStore.getAllTasks().length, 'tasks');
+    console.log('2. Get all projects:', DataStore.getAllProjects());
+    console.log('3. Get inbox tasks:', DataStore.getInboxTasks());
+    console.log('4. Get today tasks:', DataStore.getTodayTasks());
+    console.log('5. Get upcoming tasks:', DataStore.getUpcomingTasks());
+    console.log('6. Get someday tasks:', DataStore.getSomedayTasks());
+    console.log('7. Get all tags:', DataStore.getAllTags());
+    
+    const projects = DataStore.getAllProjects();
+    if (projects.length > 0) {
+        console.log('8. Get tasks by project:', DataStore.getTasksByProject(projects[0].id));
+    }
+    
+    const tags = DataStore.getAllTags();
+    if (tags.length > 0) {
+        console.log('9. Get tasks by tag:', DataStore.getTasksByTag(tags[0]));
+    }
+    
+    console.log('\n=== Testing CRUD Operations ===\n');
+    
+    const newTask = DataStore.addTask({
+        title: 'Test Task',
+        notes: 'This is a test task',
+        tags: ['test']
+    });
+    console.log('10. Created new task:', newTask);
+    
+    const updatedTask = DataStore.updateTask(newTask.id, {
+        title: 'Updated Test Task'
+    });
+    console.log('11. Updated task:', updatedTask);
+    
+    const deleted = DataStore.deleteTask(newTask.id);
+    console.log('12. Deleted task:', deleted);
+    
+    console.log('\n=== Data API Tests Complete ===\n');
+}
+
+DataStore.subscribe((event) => {
+    console.log('Data event received:', event.type, event.data);
+});
