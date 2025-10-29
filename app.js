@@ -26,6 +26,12 @@ function setupEventListeners() {
     const quickAddBtn = document.querySelector('.quick-add-btn');
     if (quickAddBtn) {
         quickAddBtn.addEventListener('click', handleQuickAdd);
+        quickAddBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleQuickAdd();
+            }
+        });
     }
     
     const modalContainer = document.getElementById('modal-container');
@@ -35,6 +41,62 @@ function setupEventListeners() {
                 closeModal();
             }
         });
+    }
+    
+    const menuToggle = document.querySelector('.menu-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
+    
+    if (menuToggle && sidebar && sidebarOverlay) {
+        menuToggle.addEventListener('click', () => {
+            toggleSidebar();
+        });
+        
+        sidebarOverlay.addEventListener('click', () => {
+            closeSidebar();
+        });
+    }
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('modal-container');
+            if (modal && modal.classList.contains('active')) {
+                closeModal();
+            } else {
+                closeSidebar();
+            }
+        }
+        
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            handleQuickAdd();
+        }
+    });
+}
+
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
+    const menuToggle = document.querySelector('.menu-toggle');
+    
+    if (sidebar && sidebarOverlay && menuToggle) {
+        const isOpen = sidebar.classList.toggle('open');
+        sidebarOverlay.classList.toggle('active', isOpen);
+        menuToggle.classList.toggle('active', isOpen);
+        menuToggle.setAttribute('aria-expanded', isOpen);
+    }
+}
+
+function closeSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
+    const menuToggle = document.querySelector('.menu-toggle');
+    
+    if (sidebar && sidebarOverlay && menuToggle) {
+        sidebar.classList.remove('open');
+        sidebarOverlay.classList.remove('active');
+        menuToggle.classList.remove('active');
+        menuToggle.setAttribute('aria-expanded', 'false');
     }
 }
 
@@ -53,6 +115,17 @@ function setupNavigation() {
             selectedProjectId = null;
             activeTagFilter = null;
             updateMainContent(section);
+            
+            if (window.innerWidth <= 768) {
+                closeSidebar();
+            }
+        });
+        
+        link.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                link.click();
+            }
         });
         
         link.addEventListener('dragover', (e) => {
@@ -218,40 +291,43 @@ function renderEmptyState(section) {
 function renderTaskItem(task) {
     const dueDateDisplay = task.dueDate ? formatDate(task.dueDate) : '';
     const tagsHtml = task.tags.map(tag => 
-        `<span class="tag-chip clickable" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)} <button class="remove-tag-btn" data-task-id="${task.id}" data-tag="${escapeHtml(tag)}">×</button></span>`
+        `<span class="tag-chip clickable" data-tag="${escapeHtml(tag)}" role="listitem" tabindex="0" aria-label="Tag: ${escapeHtml(tag)}">${escapeHtml(tag)} <button class="remove-tag-btn" data-task-id="${task.id}" data-tag="${escapeHtml(tag)}" aria-label="Remove ${escapeHtml(tag)} tag">×</button></span>`
     ).join('');
     const projectName = task.projectId ? getProjectName(task.projectId) : '';
     
     const isInbox = task.isInbox && task.type === 'inbox';
     
     return `
-        <div class="task-item" data-task-id="${task.id}" draggable="true">
+        <div class="task-item" data-task-id="${task.id}" draggable="true" role="article" aria-label="Task: ${escapeHtml(task.title)}">
             <div class="task-checkbox-wrapper">
                 <input type="checkbox" 
                        class="task-checkbox" 
                        ${task.status === 'completed' ? 'checked' : ''}
-                       data-task-id="${task.id}">
+                       data-task-id="${task.id}"
+                       aria-label="Mark task as ${task.status === 'completed' ? 'incomplete' : 'complete'}">
             </div>
             <div class="task-content">
                 <div class="task-title-row">
                     <span class="task-title ${task.status === 'completed' ? 'completed' : ''}" 
                           contenteditable="true" 
                           data-task-id="${task.id}" 
-                          data-field="title">${escapeHtml(task.title)}</span>
-                    <div class="task-actions">
-                        ${isInbox ? `<button class="task-action-btn process-task-btn" data-task-id="${task.id}" title="Process/Clarify">🔄</button>` : ''}
-                        <button class="task-action-btn move-task-btn" data-task-id="${task.id}" title="Move to...">📋</button>
-                        <button class="task-action-btn add-tag-btn" data-task-id="${task.id}" title="Add tag">🏷️</button>
-                        <button class="task-action-btn edit-task-btn" data-task-id="${task.id}" title="Edit task">✏️</button>
-                        <button class="task-action-btn delete-task-btn" data-task-id="${task.id}" title="Delete task">🗑️</button>
+                          data-field="title"
+                          role="textbox"
+                          aria-label="Task title">${escapeHtml(task.title)}</span>
+                    <div class="task-actions" role="group" aria-label="Task actions">
+                        ${isInbox ? `<button class="task-action-btn process-task-btn" data-task-id="${task.id}" title="Process/Clarify" aria-label="Process or clarify task"><span aria-hidden="true">🔄</span></button>` : ''}
+                        <button class="task-action-btn move-task-btn" data-task-id="${task.id}" title="Move to..." aria-label="Move task to another section"><span aria-hidden="true">📋</span></button>
+                        <button class="task-action-btn add-tag-btn" data-task-id="${task.id}" title="Add tag" aria-label="Add tag to task"><span aria-hidden="true">🏷️</span></button>
+                        <button class="task-action-btn edit-task-btn" data-task-id="${task.id}" title="Edit task" aria-label="Edit task details"><span aria-hidden="true">✏️</span></button>
+                        <button class="task-action-btn delete-task-btn" data-task-id="${task.id}" title="Delete task" aria-label="Delete task"><span aria-hidden="true">🗑️</span></button>
                     </div>
                 </div>
-                ${task.notes ? `<div class="task-notes" contenteditable="true" data-task-id="${task.id}" data-field="notes">${escapeHtml(task.notes)}</div>` : 
-                  `<div class="task-notes task-notes-empty" contenteditable="true" data-task-id="${task.id}" data-field="notes" placeholder="Add notes..."></div>`}
+                ${task.notes ? `<div class="task-notes" contenteditable="true" data-task-id="${task.id}" data-field="notes" role="textbox" aria-label="Task notes">${escapeHtml(task.notes)}</div>` : 
+                  `<div class="task-notes task-notes-empty" contenteditable="true" data-task-id="${task.id}" data-field="notes" placeholder="Add notes..." role="textbox" aria-label="Task notes"></div>`}
                 <div class="task-meta">
-                    ${dueDateDisplay ? `<span class="task-due-date">📅 ${dueDateDisplay}</span>` : ''}
-                    ${projectName ? `<span class="task-project">📁 ${escapeHtml(projectName)}</span>` : ''}
-                    ${tagsHtml ? `<div class="task-tags">${tagsHtml}</div>` : ''}
+                    ${dueDateDisplay ? `<span class="task-due-date" aria-label="Due date: ${dueDateDisplay}"><span aria-hidden="true">📅</span> ${dueDateDisplay}</span>` : ''}
+                    ${projectName ? `<span class="task-project" aria-label="Project: ${escapeHtml(projectName)}"><span aria-hidden="true">📁</span> ${escapeHtml(projectName)}</span>` : ''}
+                    ${tagsHtml ? `<div class="task-tags" role="list" aria-label="Task tags">${tagsHtml}</div>` : ''}
                 </div>
             </div>
         </div>
@@ -465,10 +541,10 @@ function showQuickAddModal() {
     if (!modalContainer) return;
     
     modalContainer.innerHTML = `
-        <div class="modal">
+        <div class="modal" role="dialog" aria-labelledby="modal-title" aria-describedby="modal-description">
             <div class="modal-header">
-                <h3>Quick Add Task</h3>
-                <button class="modal-close-btn" onclick="closeModal()">✕</button>
+                <h3 id="modal-title">Quick Add Task</h3>
+                <button class="modal-close-btn" onclick="closeModal()" aria-label="Close modal">✕</button>
             </div>
             <form class="modal-form" id="quick-add-form">
                 <div class="form-group">
@@ -478,14 +554,16 @@ function showQuickAddModal() {
                            name="title" 
                            placeholder="Enter task title..." 
                            required 
-                           autofocus>
+                           autofocus
+                           aria-required="true">
                 </div>
                 <div class="form-group">
                     <label for="task-notes">Notes (optional)</label>
                     <textarea id="task-notes" 
                               name="notes" 
                               placeholder="Add any additional notes..."
-                              rows="3"></textarea>
+                              rows="3"
+                              aria-label="Task notes"></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -496,10 +574,16 @@ function showQuickAddModal() {
     `;
     
     modalContainer.classList.add('active');
+    modalContainer.setAttribute('aria-hidden', 'false');
     
     const form = document.getElementById('quick-add-form');
     if (form) {
         form.addEventListener('submit', handleQuickAddSubmit);
+    }
+    
+    const firstInput = document.getElementById('task-title');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 100);
     }
 }
 
@@ -513,10 +597,10 @@ function showEditTaskModal(task) {
     ).join('');
     
     modalContainer.innerHTML = `
-        <div class="modal">
+        <div class="modal" role="dialog" aria-labelledby="modal-title">
             <div class="modal-header">
-                <h3>Edit Task</h3>
-                <button class="modal-close-btn" onclick="closeModal()">✕</button>
+                <h3 id="modal-title">Edit Task</h3>
+                <button class="modal-close-btn" onclick="closeModal()" aria-label="Close modal">✕</button>
             </div>
             <form class="modal-form" id="edit-task-form">
                 <div class="form-group">
@@ -526,24 +610,27 @@ function showEditTaskModal(task) {
                            name="title" 
                            value="${escapeHtml(task.title)}"
                            required 
-                           autofocus>
+                           autofocus
+                           aria-required="true">
                 </div>
                 <div class="form-group">
                     <label for="edit-task-notes">Notes</label>
                     <textarea id="edit-task-notes" 
                               name="notes" 
-                              rows="3">${escapeHtml(task.notes)}</textarea>
+                              rows="3"
+                              aria-label="Task notes">${escapeHtml(task.notes)}</textarea>
                 </div>
                 <div class="form-group">
                     <label for="edit-task-due-date">Due Date</label>
                     <input type="date" 
                            id="edit-task-due-date" 
                            name="dueDate"
-                           value="${task.dueDate || ''}">
+                           value="${task.dueDate || ''}"
+                           aria-label="Due date">
                 </div>
                 <div class="form-group">
                     <label for="edit-task-project">Project</label>
-                    <select id="edit-task-project" name="projectId">
+                    <select id="edit-task-project" name="projectId" aria-label="Select project">
                         <option value="">No Project</option>
                         ${projectOptions}
                     </select>
@@ -554,7 +641,8 @@ function showEditTaskModal(task) {
                            id="edit-task-tags" 
                            name="tags"
                            value="${task.tags.join(', ')}"
-                           placeholder="work, urgent, meeting">
+                           placeholder="work, urgent, meeting"
+                           aria-label="Task tags">
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -565,10 +653,16 @@ function showEditTaskModal(task) {
     `;
     
     modalContainer.classList.add('active');
+    modalContainer.setAttribute('aria-hidden', 'false');
     
     const form = document.getElementById('edit-task-form');
     if (form) {
         form.addEventListener('submit', (e) => handleEditTaskSubmit(e, task.id));
+    }
+    
+    const firstInput = document.getElementById('edit-task-title');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 100);
     }
 }
 
@@ -898,7 +992,10 @@ function closeModal() {
     const modalContainer = document.getElementById('modal-container');
     if (modalContainer) {
         modalContainer.classList.remove('active');
-        modalContainer.innerHTML = '';
+        modalContainer.setAttribute('aria-hidden', 'true');
+        setTimeout(() => {
+            modalContainer.innerHTML = '';
+        }, 300);
     }
 }
 
