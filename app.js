@@ -5,6 +5,10 @@ let selectedProjectId = null;
 let activeTagFilter = null;
 let editingTaskId = null;
 let draggedTaskId = null;
+let currentCalendarDate = new Date();
+let touchStartX = 0;
+let touchStartY = 0;
+let draggedElement = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded and parsed');
@@ -224,8 +228,8 @@ function updateMainContent(section) {
                 tasks = DataStore.getSomedayTasks();
                 break;
             case 'calendar':
-                tasks = [];
-                break;
+                renderCalendarView();
+                return;
             default:
                 tasks = [];
         }
@@ -420,6 +424,332 @@ function renderProjectsView() {
     attachProjectEventListeners();
     attachTaskEventListeners();
     setupDropZone();
+}
+
+function renderCalendarView() {
+    const contentArea = document.querySelector('.content-area');
+    if (!contentArea) return;
+    
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayOfWeek = firstDay.getDay();
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    const allTasks = DataStore.getAllTasks();
+    const tasksByDate = {};
+    
+    allTasks.forEach(task => {
+        if (task.dueDate && task.status === 'pending') {
+            const dateKey = task.dueDate.split('T')[0];
+            if (!tasksByDate[dateKey]) {
+                tasksByDate[dateKey] = [];
+            }
+            tasksByDate[dateKey].push(task);
+        }
+    });
+    
+    let html = `
+        <div class="calendar-container">
+            <div class="calendar-header">
+                <h2>${monthNames[month]} ${year}</h2>
+                <div class="calendar-nav">
+                    <button class="calendar-nav-btn" onclick="navigateCalendar(-1)" title="Previous month">
+                        ◀
+                    </button>
+                    <button class="calendar-nav-btn" onclick="navigateCalendarToday()" title="Today">
+                        Today
+                    </button>
+                    <button class="calendar-nav-btn" onclick="navigateCalendar(1)" title="Next month">
+                        ▶
+                    </button>
+                </div>
+            </div>
+            
+            <div class="calendar-weekdays">
+                <div class="calendar-weekday">Sun</div>
+                <div class="calendar-weekday">Mon</div>
+                <div class="calendar-weekday">Tue</div>
+                <div class="calendar-weekday">Wed</div>
+                <div class="calendar-weekday">Thu</div>
+                <div class="calendar-weekday">Fri</div>
+                <div class="calendar-weekday">Sat</div>
+            </div>
+            
+            <div class="calendar-grid">
+    `;
+    
+    for (let i = 0; i < startDayOfWeek; i++) {
+        html += '<div class="calendar-day calendar-day-empty"></div>';
+    }
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day);
+        const dateStr = dateObj.toISOString().split('T')[0];
+        const isToday = dateStr === todayStr;
+        const tasksForDay = tasksByDate[dateStr] || [];
+        
+        html += `
+            <div class="calendar-day ${isToday ? 'calendar-day-today' : ''}" 
+                 data-date="${dateStr}">
+                <div class="calendar-day-number">${day}</div>
+                <div class="calendar-day-tasks">
+        `;
+        
+        tasksForDay.forEach(task => {
+            const projectName = task.projectId ? getProjectName(task.projectId) : '';
+            html += `
+                <div class="calendar-task-chip" 
+                     data-task-id="${task.id}" 
+                     draggable="true"
+                     title="${escapeHtml(task.title)}${projectName ? ' - ' + escapeHtml(projectName) : ''}">
+                    <span class="calendar-task-title">${escapeHtml(task.title)}</span>
+                    <button class="calendar-task-remove" 
+                            data-task-id="${task.id}" 
+                            title="Clear due date">×</button>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    html += `
+            </div>
+            
+            <div class="calendar-sidebar">
+                <h3>Unscheduled Tasks</h3>
+                <div class="calendar-unscheduled-tasks">
+    `;
+    
+    const unscheduledTasks = allTasks.filter(task => 
+        !task.dueDate && task.status === 'pending' && task.type !== 'someday'
+    );
+    
+    if (unscheduledTasks.length === 0) {
+        html += `
+            <div class="empty-state-small">
+                <p>All tasks are scheduled! 🎉</p>
+            </div>
+        `;
+    } else {
+        unscheduledTasks.forEach(task => {
+            const projectName = task.projectId ? getProjectName(task.projectId) : '';
+            html += `
+                <div class="calendar-task-chip calendar-task-chip-unscheduled" 
+                     data-task-id="${task.id}" 
+                     draggable="true"
+                     title="${escapeHtml(task.title)}${projectName ? ' - ' + escapeHtml(projectName) : ''}">
+                    <span class="calendar-task-title">${escapeHtml(task.title)}</span>
+                    ${projectName ? `<span class="calendar-task-project">${escapeHtml(projectName)}</span>` : ''}
+                </div>
+            `;
+        });
+    }
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    contentArea.innerHTML = html;
+    attachCalendarEventListeners();
+}
+
+function navigateCalendar(direction) {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+    renderCalendarView();
+}
+
+function navigateCalendarToday() {
+    currentCalendarDate = new Date();
+    renderCalendarView();
+}
+
+function attachCalendarEventListeners() {
+    const calendarDays = document.querySelectorAll('.calendar-day:not(.calendar-day-empty)');
+    
+    calendarDays.forEach(day => {
+        day.addEventListener('dragover', handleCalendarDragOver);
+        day.addEventListener('dragleave', handleCalendarDragLeave);
+        day.addEventListener('drop', handleCalendarDrop);
+        
+        day.addEventListener('touchmove', handleTouchMove);
+        day.addEventListener('touchend', handleTouchEnd);
+    });
+    
+    const taskChips = document.querySelectorAll('.calendar-task-chip');
+    taskChips.forEach(chip => {
+        chip.addEventListener('dragstart', handleCalendarTaskDragStart);
+        chip.addEventListener('dragend', handleCalendarTaskDragEnd);
+        
+        chip.addEventListener('touchstart', handleTouchStart);
+    });
+    
+    const removeButtons = document.querySelectorAll('.calendar-task-remove');
+    removeButtons.forEach(btn => {
+        btn.addEventListener('click', handleClearDueDate);
+    });
+    
+    const unscheduledArea = document.querySelector('.calendar-unscheduled-tasks');
+    if (unscheduledArea) {
+        unscheduledArea.addEventListener('dragover', handleCalendarDragOver);
+        unscheduledArea.addEventListener('dragleave', handleCalendarDragLeave);
+        unscheduledArea.addEventListener('drop', handleUnscheduledDrop);
+    }
+}
+
+function handleCalendarDragOver(e) {
+    if (draggedTaskId) {
+        e.preventDefault();
+        e.currentTarget.classList.add('calendar-drop-target');
+    }
+}
+
+function handleCalendarDragLeave(e) {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    e.currentTarget.classList.remove('calendar-drop-target');
+}
+
+function handleCalendarDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('calendar-drop-target');
+    
+    if (!draggedTaskId) return;
+    
+    const dateStr = e.currentTarget.getAttribute('data-date');
+    if (dateStr) {
+        DataStore.updateTask(draggedTaskId, { dueDate: dateStr });
+        renderCalendarView();
+        updateOtherViews();
+    }
+}
+
+function handleUnscheduledDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('calendar-drop-target');
+    
+    if (!draggedTaskId) return;
+    
+    DataStore.updateTask(draggedTaskId, { dueDate: null });
+    renderCalendarView();
+    updateOtherViews();
+}
+
+function handleCalendarTaskDragStart(e) {
+    draggedTaskId = e.currentTarget.getAttribute('data-task-id');
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleCalendarTaskDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    draggedTaskId = null;
+}
+
+function handleClearDueDate(e) {
+    e.stopPropagation();
+    const taskId = e.currentTarget.getAttribute('data-task-id');
+    
+    if (taskId) {
+        DataStore.updateTask(taskId, { dueDate: null });
+        renderCalendarView();
+        updateOtherViews();
+    }
+}
+
+function handleTouchStart(e) {
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    draggedTaskId = e.currentTarget.getAttribute('data-task-id');
+    draggedElement = e.currentTarget;
+    
+    setTimeout(() => {
+        if (draggedElement) {
+            draggedElement.classList.add('dragging');
+        }
+    }, 100);
+}
+
+function handleTouchMove(e) {
+    if (!draggedTaskId) return;
+    
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    document.querySelectorAll('.calendar-drop-target').forEach(el => {
+        el.classList.remove('calendar-drop-target');
+    });
+    
+    let dropTarget = elementAtPoint;
+    while (dropTarget && !dropTarget.classList.contains('calendar-day') && 
+           !dropTarget.classList.contains('calendar-unscheduled-tasks')) {
+        dropTarget = dropTarget.parentElement;
+    }
+    
+    if (dropTarget && (dropTarget.classList.contains('calendar-day') || 
+                       dropTarget.classList.contains('calendar-unscheduled-tasks'))) {
+        dropTarget.classList.add('calendar-drop-target');
+    }
+}
+
+function handleTouchEnd(e) {
+    if (!draggedTaskId) return;
+    
+    const touch = e.changedTouches[0];
+    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    let dropTarget = elementAtPoint;
+    while (dropTarget && !dropTarget.classList.contains('calendar-day') && 
+           !dropTarget.classList.contains('calendar-unscheduled-tasks')) {
+        dropTarget = dropTarget.parentElement;
+    }
+    
+    if (dropTarget) {
+        if (dropTarget.classList.contains('calendar-day')) {
+            const dateStr = dropTarget.getAttribute('data-date');
+            if (dateStr) {
+                DataStore.updateTask(draggedTaskId, { dueDate: dateStr });
+            }
+        } else if (dropTarget.classList.contains('calendar-unscheduled-tasks')) {
+            DataStore.updateTask(draggedTaskId, { dueDate: null });
+        }
+    }
+    
+    document.querySelectorAll('.calendar-drop-target').forEach(el => {
+        el.classList.remove('calendar-drop-target');
+    });
+    
+    if (draggedElement) {
+        draggedElement.classList.remove('dragging');
+    }
+    
+    draggedTaskId = null;
+    draggedElement = null;
+    
+    renderCalendarView();
+    updateOtherViews();
+}
+
+function updateOtherViews() {
+    if (currentSection !== 'calendar') {
+        updateMainContent(currentSection);
+    }
 }
 
 function attachProjectEventListeners() {
