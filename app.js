@@ -122,8 +122,12 @@ function handleDropOnSection(taskId, section) {
 }
 
 function updateMainContent(section) {
+    console.log('updateMainContent called with section:', section);
     const contentArea = document.querySelector('.content-area');
-    if (!contentArea) return;
+    if (!contentArea) {
+        console.error('contentArea not found');
+        return;
+    }
     
     const sectionTitles = {
         'inbox': 'Inbox',
@@ -138,6 +142,22 @@ function updateMainContent(section) {
     
     if (section === 'projects') {
         renderProjectsView();
+    } else if (section === 'calendar') {
+        console.log('Rendering calendar view...');
+        try {
+            renderCalendarView();
+            console.log('Calendar view rendered successfully');
+        } catch (error) {
+            console.error('Error rendering calendar:', error);
+            contentArea.innerHTML = `
+                <h2>Calendar</h2>
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <p class="empty-state-message">Error loading calendar: ${error.message}</p>
+                </div>
+            `;
+        }
+        return;
     } else {
         let tasks = [];
         
@@ -154,9 +174,6 @@ function updateMainContent(section) {
             case 'someday':
                 tasks = DataStore.getSomedayTasks();
                 break;
-            case 'calendar':
-                renderCalendarView();
-                return;
             default:
                 tasks = [];
         }
@@ -351,11 +368,17 @@ function renderProjectsView() {
 }
 
 function renderCalendarView() {
+    console.log('renderCalendarView called');
     const contentArea = document.querySelector('.content-area');
-    if (!contentArea) return;
+    if (!contentArea) {
+        console.error('contentArea not found in renderCalendarView');
+        return;
+    }
     
+    console.log('currentCalendarDate:', currentCalendarDate);
     const year = currentCalendarDate.getFullYear();
     const month = currentCalendarDate.getMonth();
+    console.log('Rendering calendar for:', year, month);
     
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
