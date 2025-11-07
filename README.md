@@ -1,223 +1,382 @@
-# GetDone - Task Management Application
+# Data Engineering Stack
 
-A modern, GTD-inspired task management application with calendar scheduling, built with vanilla JavaScript.
+A comprehensive Docker Compose-based data engineering platform designed to run on resource-constrained laptops with support for multi-architecture deployments (including ARM64).
 
 ## Features
 
-✅ **Task Management**
-- Inbox for capturing quick tasks
-- Today view for tasks due today
-- Upcoming view for future tasks
-- Someday/Maybe for backlog items
-- Projects organization
-- Tags and filtering
+- **Apache Airflow**: Workflow orchestration with webserver, scheduler, and triggerer
+- **Apache Spark**: Distributed processing with master and worker nodes
+- **Hadoop HDFS**: Distributed file system with namenode and datanode
+- **Apache Hive**: Data warehouse with HiveServer2 and PostgreSQL metastore
+- **Jupyter Notebook**: Interactive notebook environment with PySpark integration
+- **PostgreSQL**: Metadata storage for Airflow and Hive
+- **Redis**: Message broker for Airflow Celery executor
 
-📆 **Calendar Scheduling** (NEW!)
-- Monthly calendar view
-- Drag-and-drop tasks onto dates
-- Visual due date management
-- Touch support for mobile/tablet
-- Responsive design
+## System Requirements
 
-💾 **Data Persistence**
-- LocalStorage-based data layer
-- Automatic saving
-- Sample data on first load
+- Docker and Docker Compose
+- Minimum 4GB RAM available
+- Minimum 10GB disk space for volumes
+- Supported architectures: x86_64, arm64 (Apple Silicon, etc.)
 
 ## Quick Start
 
-### 1. Open the Application
+### 1. First Time Setup
 
-**Option A: Using Python (Recommended)**
+Clone or navigate to the project directory and run:
+
 ```bash
-python3 -m http.server 8080
+make bootstrap
 ```
-Then open: http://localhost:8080
 
-**Option B: Using Node.js**
+This will:
+- Create a `.env` file from `.env.example`
+- Build all Docker images
+- Start all services
+- Format HDFS and initialize directories
+- Wait for all services to be healthy
+
+### 2. Access the Services
+
+After bootstrap completes, access the UIs:
+
+- **Airflow UI**: http://localhost:8080 (login: admin/admin)
+- **HDFS NameNode UI**: http://localhost:9870
+- **Spark Master UI**: http://localhost:8081
+- **Spark Worker UI**: http://localhost:8082
+- **HiveServer2**: localhost:10000 (via Beeline or JDBC)
+- **Jupyter Notebook**: http://localhost:8888 (token: jupyter_token)
+
+## Common Commands
+
+### Start the Stack
+
 ```bash
-npx http-server -p 8080
+make up
 ```
-Then open: http://localhost:8080
 
-**Option C: Using PHP**
+Or use Docker Compose directly:
+
 ```bash
-php -S localhost:8080
+docker compose up -d
 ```
-Then open: http://localhost:8080
 
-**Option D: Direct File Access**
-Simply open `index.html` in your browser (some features may be limited)
+### Stop the Stack
 
-### 2. Navigate to Calendar
+```bash
+make down
+```
 
-1. Click **"Calendar"** in the left sidebar (📆 icon)
-2. You should see a monthly calendar grid
-3. Tasks with due dates appear on their respective dates
-4. Unscheduled tasks appear in the right sidebar
+Stops and removes containers but preserves volumes.
 
-### 3. Using the Calendar
+```bash
+make stop
+```
 
-**Assign due dates:**
-- Drag a task from "Unscheduled Tasks" to any calendar date
+Stops containers without removing them.
 
-**Reschedule tasks:**
-- Drag a task from one date to another
+### View Logs
 
-**Clear due dates:**
-- Click the **×** button on a task chip
-- OR drag the task back to "Unscheduled Tasks"
+```bash
+# All services
+make logs
 
-**Navigate months:**
-- Click **◀** for previous month
-- Click **▶** for next month
-- Click **Today** to jump to current month
+# Specific services
+make logs-airflow
+make logs-spark
+make logs-hdfs
+make logs-hive
+```
 
-## Troubleshooting
+### Check Status
 
-### "Calendar view coming soon" appears instead of calendar?
+```bash
+make status
+```
 
-This is likely a **browser cache issue**. Try:
+### Restart Services
 
-1. **Hard refresh:** `Ctrl + Shift + R` (Windows/Linux) or `Cmd + Shift + R` (Mac)
-2. **Clear cache:** See `CALENDAR_TROUBLESHOOTING.md` for detailed instructions
-3. **Check console:** Press F12 → Console tab for error messages
+```bash
+make restart
+```
 
-See **CALENDAR_TROUBLESHOOTING.md** for complete troubleshooting guide.
+### Clean Up Everything
 
-## File Structure
+```bash
+make clean
+```
+
+Removes all containers and volumes.
+
+## Configuration
+
+Edit `.env` to customize:
+
+- Ports for each service
+- Database credentials
+- Resource limits (CPU and memory)
+- Jupyter token
+- HDFS configuration (replication factor, block size)
+
+### Important Environment Variables
+
+```
+AIRFLOW_WEBSERVER_PORT=8080          # Airflow UI port
+AIRFLOW_UID=50000                     # Airflow user ID
+POSTGRES_USER=airflow                 # Database user
+POSTGRES_PASSWORD=airflow             # Database password
+SPARK_MASTER_PORT=7077                # Spark master port
+HDFS_NAMENODE_PORT=9000               # HDFS port
+HIVESERVER2_PORT=10000                # HiveServer2 port
+JUPYTER_PORT=8888                     # Jupyter port
+JUPYTER_TOKEN=jupyter_token            # Jupyter access token
+CPU_LIMIT=2.0                         # CPU limit per service
+MEMORY_LIMIT=2g                       # Memory limit per service
+```
+
+## Directory Structure
 
 ```
 .
-├── index.html              # Main HTML file
-├── app.js                  # Application logic (1,329 lines)
-├── data.js                 # Data layer with LocalStorage
-├── styles.css              # Styles including calendar (1,125 lines)
-├── debug_calendar.html     # Debug tool for calendar
-├── calendar_test.html      # Manual testing guide
-├── validate_calendar.js    # Automated validation script
-└── docs/
-    ├── CALENDAR_FEATURE.md              # Calendar feature docs
-    ├── CALENDAR_IMPLEMENTATION_SUMMARY.md
-    └── CALENDAR_TROUBLESHOOTING.md      # Troubleshooting guide
+├── airflow/              # Airflow Dockerfile and configuration
+├── spark/                # Spark Dockerfile and configuration
+├── hive/                 # Hive Dockerfile and configuration
+├── infra/                # Infrastructure Dockerfiles (Hadoop)
+├── notebooks/            # Jupyter notebooks directory
+├── data/                 # Shared data directory
+├── scripts/              # Helper scripts
+├── docker-compose.yml    # Main compose file
+├── Makefile              # Task automation
+├── .env.example          # Environment variables template
+└── README.md             # This file
 ```
 
-## Testing
+## Docker Compose Services
 
-### Manual Testing
-Open `calendar_test.html` for a comprehensive manual testing checklist.
+### Databases
 
-### Automated Validation
-Open the browser console on `index.html` and run:
-```javascript
-// Load and run validation script
-const script = document.createElement('script');
-script.src = 'validate_calendar.js';
-document.head.appendChild(script);
+- **postgres**: PostgreSQL for Airflow metadata (port 5432)
+- **postgres-hive**: PostgreSQL for Hive metastore (port 5433)
+- **redis**: Redis broker for Celery (port 6379)
+
+### Airflow
+
+- **airflow-init**: Initialization job (runs once)
+- **airflow-webserver**: UI server (port 8080)
+- **airflow-scheduler**: DAG scheduler
+- **airflow-triggerer**: Async trigger handler
+
+### Spark
+
+- **spark-master**: Spark master node (port 7077, UI 8081)
+- **spark-worker**: Spark worker node (UI 8082)
+
+### Hadoop HDFS
+
+- **hdfs-namenode**: HDFS namenode (port 9000, UI 9870)
+- **hdfs-datanode**: HDFS datanode (port 9864)
+
+### Hive
+
+- **hive-metastore**: Hive metastore service (port 9083)
+- **hive-server2**: HiveServer2 (port 10000)
+
+### Jupyter
+
+- **jupyter**: Jupyter Lab with PySpark (port 8888)
+
+## Advanced Tasks
+
+### Manually Format HDFS
+
+```bash
+make format-hdfs
 ```
 
-### Debug Tool
-Open `debug_calendar.html` for detailed debugging information.
+### Initialize Airflow Database
 
-## Browser Support
-
-- ✅ Chrome 90+
-- ✅ Firefox 88+
-- ✅ Safari 14+
-- ✅ Edge 90+
-- ✅ Mobile browsers (iOS Safari, Chrome Mobile)
-
-## Data Storage
-
-All data is stored in browser's LocalStorage:
-- **Key:** `getdone_app_state`
-- **First Run Flag:** `getdone_first_run`
-
-To reset all data:
-```javascript
-localStorage.clear();
-location.reload();
+```bash
+make init-airflow
 ```
 
-## API Documentation
+### Create Hive Directories
 
-### DataStore Methods
-
-```javascript
-// Tasks
-DataStore.getAllTasks()
-DataStore.getInboxTasks()
-DataStore.getTodayTasks()
-DataStore.getUpcomingTasks()
-DataStore.getSomedayTasks()
-DataStore.getTasksByProject(projectId)
-DataStore.getTasksByTag(tag)
-DataStore.addTask(taskData)
-DataStore.updateTask(taskId, updates)
-DataStore.deleteTask(taskId)
-
-// Projects
-DataStore.getAllProjects()
-DataStore.addProject(projectData)
-DataStore.updateProject(projectId, updates)
-DataStore.deleteProject(projectId)
-
-// Tags
-DataStore.getAllTags()
-
-// Events
-DataStore.subscribe(callback)
+```bash
+make create-hive-dirs
 ```
 
-### Calendar Functions
+### Shell Access
 
-```javascript
-// Render calendar view
-renderCalendarView()
+```bash
+# HDFS namenode shell
+make shell-hdfs
 
-// Navigate months
-navigateCalendar(-1)  // Previous month
-navigateCalendar(1)   // Next month
-navigateCalendarToday()  // Jump to today
+# Spark master shell
+make shell-spark
 ```
 
-## Development
+## Troubleshooting
 
-### No Build Step Required
-This is a pure vanilla JavaScript application. No npm, webpack, or build tools needed!
+### Services Fail to Start
 
-### Adding Sample Data
-Sample data is automatically added on first load. To add more:
-```javascript
-DataStore.addTask({
-    title: 'My Task',
-    notes: 'Description',
-    dueDate: '2025-12-31',
-    tags: ['important'],
-    projectId: null
-});
+Check logs:
+```bash
+docker compose logs -f
 ```
 
-## Contributing
+Ensure you have enough disk space and RAM available.
 
-1. Make changes to source files
-2. Test in browser
-3. Validate with `validate_calendar.js`
-4. Check manual tests in `calendar_test.html`
+### HDFS Not Responding
 
-## License
+Verify HDFS namenode is healthy:
+```bash
+docker compose exec hdfs-namenode hdfs dfsadmin -report
+```
 
-MIT License - see project repository for details.
+### Airflow Can't Connect to Database
+
+Verify PostgreSQL is running:
+```bash
+docker compose ps postgres
+```
+
+Check database connectivity:
+```bash
+docker compose exec postgres psql -U airflow -d airflow -c "SELECT version();"
+```
+
+### Jupyter Token Not Working
+
+The token is set in the `.env` file. Default is `jupyter_token`. To access Jupyter, use:
+
+```
+http://localhost:8888?token=jupyter_token
+```
+
+Or check the logs:
+```bash
+docker compose logs jupyter
+```
+
+## Resource Management
+
+All services have CPU and memory limits defined to work on resource-constrained systems:
+
+- Airflow: 1 CPU, 512MB RAM
+- Spark Master: 1 CPU, 512MB RAM
+- Spark Worker: 1 CPU, 512MB RAM
+- HDFS Namenode: 1 CPU, 512MB RAM
+- HDFS Datanode: 1 CPU, 512MB RAM
+- Hive: 0.5 CPU, 256MB RAM
+- Jupyter: 2 CPU, 1GB RAM
+
+You can adjust these in `.env` or `docker-compose.yml`.
+
+## Data Persistence
+
+All data is persisted in Docker volumes:
+
+- `postgres_data`: Airflow metadata
+- `postgres_hive_data`: Hive metastore
+- `hdfs_namenode`: HDFS name node data
+- `hdfs_datanode`: HDFS data node data
+- `hive_warehouse`: Hive warehouse data
+- `airflow_dags`: Airflow DAG files
+- `shared_data`, `shared_notebooks`, `shared_scripts`: Shared across services
+
+Volumes are preserved when using `make down` or `docker compose down`. Use `make clean` to remove them.
+
+## Writing DAGs
+
+Place DAG files in the `airflow/dags/` directory. They will be automatically picked up by Airflow.
+
+Example:
+
+```python
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from datetime import datetime, timedelta
+
+default_args = {
+    'owner': 'airflow',
+    'start_date': datetime(2024, 1, 1),
+}
+
+with DAG(
+    'example_dag',
+    default_args=default_args,
+    schedule_interval=timedelta(days=1),
+) as dag:
+    task1 = BashOperator(
+        task_id='hello',
+        bash_command='echo "Hello from Airflow"',
+    )
+```
+
+## Submitting Spark Jobs
+
+Connect to Spark master at `spark://spark-master:7077` from Airflow or submit jobs directly:
+
+```bash
+docker compose exec spark-master spark-submit \
+  --master spark://spark-master:7077 \
+  /path/to/job.py
+```
+
+## Using HiveServer2
+
+Connect via Beeline:
+
+```bash
+docker compose exec hive-server2 beeline -u jdbc:hive2://hive-server2:10000
+```
+
+Or connect from Spark:
+
+```python
+df = spark.sql("SELECT * FROM my_table")
+```
+
+## Connecting to Jupyter
+
+Access Jupyter at: http://localhost:8888
+
+Mount points available in Jupyter:
+- `/home/jovyan/work/notebooks` - Notebooks directory
+- `/home/jovyan/work/data` - Shared data
+- `/home/jovyan/work/scripts` - Scripts directory
+
+## Building Custom Images
+
+To rebuild all images:
+
+```bash
+make build
+```
+
+Or rebuild specific service:
+
+```bash
+docker compose build --no-cache airflow
+```
+
+## Performance Tuning
+
+For better performance on resource-constrained systems:
+
+1. Increase CPU/Memory limits in `.env`
+2. Reduce Spark worker memory in `docker-compose.yml`
+3. Enable HDFS caching if available
+4. Use appropriate Spark configurations for your workload
 
 ## Support
 
-- 📖 See `CALENDAR_FEATURE.md` for complete feature documentation
-- 🔧 See `CALENDAR_TROUBLESHOOTING.md` for troubleshooting
-- 🧪 See `calendar_test.html` for testing guide
-- 💬 Check browser console for debug messages (F12)
+For issues or questions, check:
 
----
+1. Docker Compose logs: `docker compose logs -f`
+2. Service-specific logs: `make logs-<service>`
+3. Docker Desktop Dashboard (if using Docker Desktop)
 
-**Version:** 1.0.0  
-**Last Updated:** October 2025  
-**Calendar Feature:** ✅ Fully Implemented
+## License
+
+This project is provided as-is for educational and development purposes.

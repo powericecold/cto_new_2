@@ -1,70 +1,172 @@
-# Quick Start Guide - Data Layer
+# Quick Start Guide
 
-## Getting Started (30 seconds)
+Get the data engineering stack up and running in 5 minutes.
 
-1. Open `index.html` in your browser
-2. Open Browser Console (F12)
-3. See automatic tests run and sample data loaded!
+## Prerequisites
 
-## Basic Usage
+- Docker and Docker Compose installed
+- 4GB+ RAM available
+- 10GB+ free disk space
 
-```javascript
-// Initialize (done automatically on page load)
-DataStore.initialize();
+## Steps
 
-// Get tasks by view
-const inbox = DataStore.getInboxTasks();
-const today = DataStore.getTodayTasks();
-const upcoming = DataStore.getUpcomingTasks();
-const someday = DataStore.getSomedayTasks();
+### 1. Create .env File
 
-// Add a task
-const task = DataStore.addTask({
-    title: 'Buy groceries',
-    notes: 'Milk, eggs, bread',
-    dueDate: '2024-12-31',
-    tags: ['shopping', 'personal']
-});
-
-// Update a task
-DataStore.updateTask(task.id, {
-    status: 'completed'
-});
-
-// Delete a task
-DataStore.deleteTask(task.id);
-
-// Listen for changes
-DataStore.subscribe((event) => {
-    console.log('Something changed:', event.type);
-    // Update your UI here
-});
+```bash
+cp .env.example .env
 ```
 
-## Sample Data
+No changes needed for default setup, but you can customize ports and credentials if desired.
 
-On first run, you get:
-- 3 Projects (Work, Personal, Home Improvement)
-- 9 Tasks (mix of inbox, today, upcoming, someday)
-- 9 Tags (urgent, review, health, etc.)
+### 2. Bootstrap the Stack
 
-## Reset Everything
-
-```javascript
-localStorage.clear();
-location.reload();
+```bash
+make bootstrap
 ```
 
-## Test Page
+This single command will:
+- Build all Docker images
+- Start all services
+- Initialize databases
+- Format HDFS
+- Create necessary directories
+- Wait for all services to be healthy
 
-Open `test.html` for comprehensive automated tests with colorful console output!
+### 3. Verify Services Are Running
 
-## Documentation
+```bash
+make status
+```
 
-- `DATA_LAYER.md` - Full API reference
-- `ACCEPTANCE_TEST.md` - Test results and manual testing
-- `IMPLEMENTATION_SUMMARY.md` - Technical details
+You should see all services with status "Up".
 
-## Support
+### 4. Access Services
 
-Check the browser console for helpful debug messages and test results!
+Open these URLs in your browser:
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Airflow | http://localhost:8080 | admin / admin |
+| HDFS NameNode | http://localhost:9870 | - |
+| Spark Master | http://localhost:8081 | - |
+| Jupyter | http://localhost:8888 | Token: jupyter_token |
+
+## Common Tasks
+
+### View Logs
+
+```bash
+make logs          # All services
+make logs-airflow  # Airflow only
+make logs-spark    # Spark only
+```
+
+### Stop the Stack
+
+```bash
+make down
+```
+
+Data is preserved in volumes.
+
+### Restart the Stack
+
+```bash
+make up
+```
+
+### Full Cleanup
+
+```bash
+make clean
+```
+
+Removes all containers and volumes.
+
+## First DAG
+
+1. Navigate to `http://localhost:8080` (Airflow UI)
+2. Create a DAG file in the `airflow/` directory named `hello_world.py`:
+
+```python
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from datetime import datetime
+
+with DAG(
+    'hello_world',
+    start_date=datetime(2024, 1, 1),
+    schedule_interval='@daily',
+    catchup=False,
+) as dag:
+    task = BashOperator(
+        task_id='hello',
+        bash_command='echo "Hello from Airflow!"'
+    )
+```
+
+3. The DAG will appear in Airflow within 30 seconds
+4. Click it to view and trigger manually
+
+## First Jupyter Notebook
+
+1. Open http://localhost:8888 (token: jupyter_token)
+2. Create a new Python notebook
+3. Test PySpark:
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .master("spark://spark-master:7077") \
+    .appName("test") \
+    .getOrCreate()
+
+df = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "letter"])
+df.show()
+```
+
+## Troubleshooting
+
+### Services won't start
+
+Check logs:
+```bash
+docker compose logs
+```
+
+Ensure Docker has enough resources (check Docker Desktop settings).
+
+### Can't connect to Jupyter
+
+Verify port 8888 is not in use, or change `JUPYTER_PORT` in `.env`.
+
+### HDFS issues
+
+Check namenode status:
+```bash
+docker compose exec hdfs-namenode hdfs dfsadmin -report
+```
+
+### Airflow database issues
+
+Reinitialize:
+```bash
+make clean
+make bootstrap
+```
+
+## Next Steps
+
+- Read [README.md](README.md) for detailed documentation
+- Explore Airflow at http://localhost:8080
+- Create your first DAG in the `airflow/` directory
+- Write notebooks in `notebooks/` (available in Jupyter)
+- Submit Spark jobs using `spark-submit`
+
+## Help
+
+For issues, check:
+1. Service logs: `make logs`
+2. Docker status: `docker compose ps`
+3. Full README: [README.md](README.md)
