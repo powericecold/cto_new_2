@@ -1,0 +1,367 @@
+services:
+  # PostgreSQL Database for Airflow and Hive Metastore
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-airflow
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data_stack
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Database for Hive Metastore
+  postgres-hive:
+    image: postgres:15-alpine
+    container_name: postgres-hive
+    environment:
+      POSTGRES_USER: ${HIVE_METASTORE_USER:-hive}
+      POSTGRES_PASSWORD: ${HIVE_METASTORE_PASSWORD:-hive}
+      POSTGRES_DB: ${HIVE_METASTORE_DB:-hive_metastore}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_hive_data:/var/lib/postgresql/data
+    networks:
+      - data_stack
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HIVE_METASTORE_USER:-hive}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: redis-airflow
+    ports:
+      - "6379:6379"
+    networks:
+      - data_stack
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Airflow Initialization
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: airflow-init
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create --firstname Admin --lastname User --email admin@example.com --username admin --password admin --role Admin || true
+      "
+    environment:
+      AIRFLOW__CORE__DAGS_FOLDER: ${AIRFLOW__CORE__DAGS_FOLDER:-/opt/airflow/dags}
+      AIRFLOW__CORE__LOGS_FOLDER: ${AIRFLOW__CORE__LOGS_FOLDER:-/opt/airflow/logs}
+      AIRFLOW__CORE__PLUGINS_FOLDER: ${AIRFLOW__CORE__PLUGINS_FOLDER:-/opt/airflow/plugins}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW_UID: ${AIRFLOW_UID:-50000}
+      AIRFLOW_GID: ${AIRFLOW_GID:-50000}
+    volumes:
+      - airflow_dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    networks:
+      - data_stack
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Airflow Webserver
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: airflow-webserver
+    command: webserver
+    environment:
+      AIRFLOW__CORE__DAGS_FOLDER: ${AIRFLOW__CORE__DAGS_FOLDER:-/opt/airflow/dags}
+      AIRFLOW__CORE__LOGS_FOLDER: ${AIRFLOW__CORE__LOGS_FOLDER:-/opt/airflow/logs}
+      AIRFLOW__CORE__PLUGINS_FOLDER: ${AIRFLOW__CORE__PLUGINS_FOLDER:-/opt/airflow/plugins}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW_UID: ${AIRFLOW_UID:-50000}
+      AIRFLOW_GID: ${AIRFLOW_GID:-50000}
+    ports:
+      - "${AIRFLOW_WEBSERVER_PORT:-8080}:8080"
+    volumes:
+      - airflow_dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    networks:
+      - data_stack
+    depends_on:
+      - postgres
+      - redis
+      - airflow-init
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: airflow-scheduler
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__DAGS_FOLDER: ${AIRFLOW__CORE__DAGS_FOLDER:-/opt/airflow/dags}
+      AIRFLOW__CORE__LOGS_FOLDER: ${AIRFLOW__CORE__LOGS_FOLDER:-/opt/airflow/logs}
+      AIRFLOW__CORE__PLUGINS_FOLDER: ${AIRFLOW__CORE__PLUGINS_FOLDER:-/opt/airflow/plugins}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW_UID: ${AIRFLOW_UID:-50000}
+      AIRFLOW_GID: ${AIRFLOW_GID:-50000}
+    volumes:
+      - airflow_dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    networks:
+      - data_stack
+    depends_on:
+      - postgres
+      - redis
+      - airflow-init
+
+  # Airflow Triggerer
+  airflow-triggerer:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: airflow-triggerer
+    command: triggerer
+    environment:
+      AIRFLOW__CORE__DAGS_FOLDER: ${AIRFLOW__CORE__DAGS_FOLDER:-/opt/airflow/dags}
+      AIRFLOW__CORE__LOGS_FOLDER: ${AIRFLOW__CORE__LOGS_FOLDER:-/opt/airflow/logs}
+      AIRFLOW__CORE__PLUGINS_FOLDER: ${AIRFLOW__CORE__PLUGINS_FOLDER:-/opt/airflow/plugins}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+      AIRFLOW_UID: ${AIRFLOW_UID:-50000}
+      AIRFLOW_GID: ${AIRFLOW_GID:-50000}
+    volumes:
+      - airflow_dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    networks:
+      - data_stack
+    depends_on:
+      - postgres
+      - airflow-init
+
+  # Hadoop HDFS Namenode
+  hdfs-namenode:
+    build:
+      context: ./infra
+      dockerfile: Dockerfile.hadoop
+    container_name: hdfs-namenode
+    command: namenode
+    environment:
+      CLUSTER_NAME: hadoop-cluster
+      CORE_CONF_FS_DEFAULTFS: hdfs://hdfs-namenode:${HDFS_NAMENODE_PORT:-9000}
+      CORE_CONF_HADOOP_HTTP_STATICUSER_USER: root
+      HDFS_CONF_DFS_NAMENODE_DATANODE_REGISTRATION_IP___HOSTNAME___CHECK: "false"
+      HDFS_CONF_DFS_REPLICATION: ${HDFS_REPLICATION:-1}
+      HDFS_CONF_DFS_BLOCKSIZE: ${HDFS_BLOCKSIZE:-134217728}
+    ports:
+      - "${HDFS_NAMENODE_PORT:-9000}:9000"
+      - "${HDFS_NAMENODE_WEBUI_PORT:-9870}:9870"
+    volumes:
+      - hdfs_namenode:/hadoop/dfs/name
+    networks:
+      - data_stack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Hadoop HDFS Datanode
+  hdfs-datanode:
+    build:
+      context: ./infra
+      dockerfile: Dockerfile.hadoop
+    container_name: hdfs-datanode
+    command: datanode
+    environment:
+      CLUSTER_NAME: hadoop-cluster
+      CORE_CONF_FS_DEFAULTFS: hdfs://hdfs-namenode:${HDFS_NAMENODE_PORT:-9000}
+      CORE_CONF_HADOOP_HTTP_STATICUSER_USER: root
+      HDFS_CONF_DFS_NAMENODE_DATANODE_REGISTRATION_IP___HOSTNAME___CHECK: "false"
+      HDFS_CONF_DFS_REPLICATION: ${HDFS_REPLICATION:-1}
+      HDFS_CONF_DFS_BLOCKSIZE: ${HDFS_BLOCKSIZE:-134217728}
+    ports:
+      - "${HDFS_DATANODE_PORT:-9864}:9864"
+      - "9866:9866"
+    volumes:
+      - hdfs_datanode:/hadoop/dfs/data
+    networks:
+      - data_stack
+    depends_on:
+      - hdfs-namenode
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9864"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Spark Master
+  spark-master:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-master
+    command: bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: ${SPARK_MASTER_PORT:-7077}
+      SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT:-8081}
+    ports:
+      - "${SPARK_MASTER_PORT:-7077}:${SPARK_MASTER_PORT:-7077}"
+      - "${SPARK_MASTER_WEBUI_PORT:-8081}:${SPARK_MASTER_WEBUI_PORT:-8081}"
+    volumes:
+      - shared_data:/data
+      - shared_notebooks:/notebooks
+      - shared_scripts:/scripts
+    networks:
+      - data_stack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${SPARK_MASTER_WEBUI_PORT:-8081}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Spark Worker
+  spark-worker:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-worker
+    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:${SPARK_MASTER_PORT:-7077}
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: ${SPARK_MASTER_PORT:-7077}
+      SPARK_WORKER_PORT: ${SPARK_WORKER_PORT:-8081}
+      SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT:-8082}
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 512m
+    ports:
+      - "${SPARK_WORKER_WEBUI_PORT:-8082}:${SPARK_WORKER_WEBUI_PORT:-8082}"
+    volumes:
+      - shared_data:/data
+      - shared_notebooks:/notebooks
+      - shared_scripts:/scripts
+    networks:
+      - data_stack
+    depends_on:
+      - spark-master
+
+  # Hive Metastore
+  hive-metastore:
+    build:
+      context: ./hive
+      dockerfile: Dockerfile
+    container_name: hive-metastore
+    command: /opt/hive/bin/schematool -dbType postgres -initSchema || /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: org.postgresql.Driver
+      DB_TYPE: postgres
+      SERVICE_HOSTNAME: hive-metastore
+      HIVE_METASTORE_WAREHOUSE_EXTERNAL_DIR: /user/hive/warehouse
+      HIVE_CUSTOM_CONF_DIR: /hive-custom-conf
+      POSTGRES_USER: ${HIVE_METASTORE_USER:-hive}
+      POSTGRES_PASSWORD: ${HIVE_METASTORE_PASSWORD:-hive}
+      POSTGRES_DB: ${HIVE_METASTORE_DB:-hive_metastore}
+      POSTGRES_HOST: postgres-hive
+      POSTGRES_PORT: 5432
+    ports:
+      - "9083:9083"
+    volumes:
+      - hive_warehouse:/user/hive/warehouse
+      - hive_metastore_logs:/opt/hive/logs
+    networks:
+      - data_stack
+    depends_on:
+      postgres-hive:
+        condition: service_healthy
+
+  # HiveServer2
+  hive-server2:
+    build:
+      context: ./hive
+      dockerfile: Dockerfile
+    container_name: hive-server2
+    command: /opt/hive/bin/hiveserver2
+    environment:
+      SERVICE_NAME: hiveserver2
+      SERVICE_HOSTNAME: hive-server2
+      HIVE_SERVER2_THRIFT_PORT: ${HIVESERVER2_PORT:-10000}
+      POSTGRES_USER: ${HIVE_METASTORE_USER:-hive}
+      POSTGRES_PASSWORD: ${HIVE_METASTORE_PASSWORD:-hive}
+      POSTGRES_DB: ${HIVE_METASTORE_DB:-hive_metastore}
+      POSTGRES_HOST: postgres-hive
+      POSTGRES_PORT: 5432
+    ports:
+      - "${HIVESERVER2_PORT:-10000}:${HIVESERVER2_PORT:-10000}"
+    volumes:
+      - hive_warehouse:/user/hive/warehouse
+      - hive_metastore_logs:/opt/hive/logs
+    networks:
+      - data_stack
+    depends_on:
+      - hive-metastore
+
+  # Jupyter Notebook
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter-notebook
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-jupyter_token}
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    volumes:
+      - shared_notebooks:/home/jovyan/work/notebooks
+      - shared_data:/home/jovyan/work/data
+      - shared_scripts:/home/jovyan/work/scripts
+    networks:
+      - data_stack
+    command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-jupyter_token}'
+
+networks:
+  data_stack:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  postgres_hive_data:
+  airflow_dags:
+  airflow_logs:
+  airflow_plugins:
+  hdfs_namenode:
+  hdfs_datanode:
+  hive_warehouse:
+  hive_metastore_logs:
+  shared_data:
+  shared_notebooks:
+  shared_scripts:
